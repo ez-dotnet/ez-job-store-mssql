@@ -1,5 +1,6 @@
 using EZ.Job.Core;
 using EZJob.Store.MSSQL;
+using Xunit;
 
 namespace EZ.Job.Store.MSSQL.Tests;
 
