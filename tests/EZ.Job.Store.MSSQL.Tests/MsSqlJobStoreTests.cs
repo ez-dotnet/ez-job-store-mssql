@@ -1,4 +1,4 @@
-using EZ.Job.Core;
+using Xunit;
 using EZJob.Store.MSSQL;
 using Xunit;
 
@@ -13,7 +13,7 @@ public sealed class MsSqlJobStoreTests
     public async Task AddAsync_should_store_job()
     {
         var store = new MsSqlJobStore(ConnectionString);
-        var job = new Job("test-id", "T", "M", [], [], JobStatus.Enqueued, DateTime.UtcNow, null);
+        var job = new EZ.Job.Core.Job("test-id", "T", "M", [], [], EZ.Job.Core.JobStatus.Enqueued, System.DateTime.UtcNow, null);
 
         await store.AddAsync(job);
         var result = await store.GetAsync("test-id");
