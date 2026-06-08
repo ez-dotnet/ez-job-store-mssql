@@ -16,6 +16,7 @@ public static class EZJobMsSqlExtensions
         configure(options);
 
         builder.Services.AddSingleton<IJobStore>(_ => new MsSqlJobStore(options.ConnectionString));
+        builder.Services.AddSingleton<IRecurringStore>(_ => new MsSqlRecurringStore(options.ConnectionString));
 
         return builder;
     }
