@@ -35,7 +35,9 @@ public sealed class MsSqlJobStore : IJobStore
                 status          TINYINT NOT NULL DEFAULT 0,
                 created_at      DATETIME2(6) NOT NULL,
                 error           NVARCHAR(MAX),
-                recurring_job_id NVARCHAR(64)
+                recurring_job_id NVARCHAR(64),
+                started_at      DATETIME2(6),
+                completed_at    DATETIME2(6)
             )
             """, conn);
 
@@ -48,8 +50,8 @@ public sealed class MsSqlJobStore : IJobStore
         await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
 
         await using var cmd = new SqlCommand("""
-            INSERT INTO ez_jobs (id, type_name, method_name, argument_types, arguments, status, created_at, error, recurring_job_id)
-            VALUES (@id, @type_name, @method_name, @argument_types, @arguments, @status, @created_at, @error, @recurring_job_id)
+            INSERT INTO ez_jobs (id, type_name, method_name, argument_types, arguments, status, created_at, error, recurring_job_id, started_at, completed_at)
+            VALUES (@id, @type_name, @method_name, @argument_types, @arguments, @status, @created_at, @error, @recurring_job_id, @started_at, @completed_at)
             """, conn);
 
         cmd.Parameters.AddWithValue("@id", job.Id);
@@ -61,6 +63,8 @@ public sealed class MsSqlJobStore : IJobStore
         cmd.Parameters.AddWithValue("@created_at", job.CreatedAt);
         cmd.Parameters.AddWithValue("@error", (object?)job.Error ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@recurring_job_id", (object?)job.RecurringJobId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@started_at", (object?)job.StartedAt ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@completed_at", (object?)job.CompletedAt ?? DBNull.Value);
 
         await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -106,12 +110,17 @@ public sealed class MsSqlJobStore : IJobStore
         await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
 
         await using var cmd = new SqlCommand("""
-            UPDATE ez_jobs SET status = @status, error = @error
+            UPDATE ez_jobs
+            SET status = @status,
+                error = @error,
+                started_at = CASE WHEN @status = 1 THEN COALESCE(started_at, @now) ELSE started_at END,
+                completed_at = CASE WHEN @status IN (2, 3) THEN @now ELSE NULL END
             WHERE id = @id
             """, conn);
 
         cmd.Parameters.AddWithValue("@status", (int)status);
         cmd.Parameters.AddWithValue("@error", (object?)error ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@now", DateTime.UtcNow);
         cmd.Parameters.AddWithValue("@id", id);
 
         await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
@@ -146,9 +155,9 @@ public sealed class MsSqlJobStore : IJobStore
             Status: (JobStatus)reader.GetByte(5),
             CreatedAt: reader.GetDateTime(6),
             Error: reader.IsDBNull(7) ? null : reader.GetString(7),
-            RecurringJobId: reader.IsDBNull(8) ? null : reader.GetString(8),
-            StartedAt: null,
-            CompletedAt: null);
+            StartedAt: reader.IsDBNull(9) ? null : reader.GetDateTime(9),
+            CompletedAt: reader.IsDBNull(10) ? null : reader.GetDateTime(10),
+            RecurringJobId: reader.IsDBNull(8) ? null : reader.GetString(8));
     }
 
     private static string SerializeArgs(object?[] args)
